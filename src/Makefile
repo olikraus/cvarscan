@@ -44,5 +44,5 @@ clean:
         bison_extract c_gram.output c_const.c
 
 zip:
-	zip cvarscan_`date +%F_%H-%M`.zip *.c *.h *.y *.l Makefile info.txt *.output
+	zip cvarscan_`date +%F_%H-%M`.zip *.c *.h *.y *.l Makefile info.txt *.output license.txt
 	
