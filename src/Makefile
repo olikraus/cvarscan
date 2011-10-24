@@ -45,5 +45,4 @@ clean:
 
 zip:
 	zip cvarscan_`date +%F_%H-%M`.zip *.c *.h *.y *.l Makefile info.txt *.output
-	cp *.zip /media/CANON_DC/.
 	
