@@ -1,0 +1,687 @@
+
+Bücher:
+Red Dragon
+http://www.amazon.de/Compilers-Principles-Techniques-Access-Gradiance/dp/0321547985/ref=pd_sbs_b?ie=UTF8&qid=1207464112&sr=1-1
+
+Deutsche Übersetzung des Red Dragon:
+http://www.amazon.de/Compiler-Prinzipien-Techniken-Pearson-Studium/dp/3827370973/ref=sr_1_1?ie=UTF8&s=books&qid=1207464112&sr=1-1
+
+
+Andere C99 Parser:
+http://www.mazumdar.demon.co.uk/c_parser.html
+- erzeugt (vermutlich) keinen AST
+- selbstgeschriebener lexer und parser
+- kein position tracking
+
+http://wiki.eclipse.org/CDT/designs/C99_and_UPC_Parser_Overview
+C99 für eclipse
+- Vermutlich ein C99 Parser der nicht in C geschrieben ist.
+
+http://sourceforge.net/projects/ctool
+- Vermutlich ein Ansi-C Parser der in C++ geschrieben ist.
+
+AVL Trees: libraries
+http://www.stanford.edu/~blp/avl/
+
+--------------------------------
+
+
+storage_class_specifier
+	1. child: typedef | extern | static | auto | register               
+        parent: declaration_specifiers
+
+declaration_specifiers
+        list of: storage_class_specifier | type_specifier | type_qualifier | function_specifier
+        parent: first child of "declaration"
+        condition: only one "storage_class_specifier" allowed
+
+declaration
+        1. child: declaration_specifiers
+        2. optional child: init_declarator_list
+        parent:  block_item|for|external_declaration|declaration_list
+
+init_declarator
+        1. child: declarator
+        2. optional child: initializer
+        parent: init_declarator_list
+        
+declarator
+        1. child: NIL | pointer
+        2. child: direct_declarator
+        parent: parameter_declaration|function_definition|init_declarator|struct_declarator|direct_declarator
+        
+direct_declarator
+        1. child: identifier|declarator
+        2+ child: declarator_square_bracket | declarator_square_bracket 
+
+translation_unit
+        list of: external_declaration
+        parent: file
+
+external_declaration:
+        list_of: declaration | function_definition
+ 
+block_item_list:
+        list of: block_item
+        parent: compound_statement
+  
+block_item:
+        list_of: declaration | statement
+ 
+ -----------------
+ 
+prüfen: square bracket:
+die 'star' rule wird ja nicht mehr verwendet. Wird star dann freigegeben?
+wäre zu prüfen
+
+ 
+so einen ast_path mit jedem element abspeichern
+
+ 
+13.04.2009
+beim return value ist is_function gesetzt, was bei test_fn_08.c zu einem seg fault führt.
+
+
+17.04.2009
+in  test_struct_05.c wird "is_function" gar nicht gesetzt.
+--> ERLEDIGT 18.04.2009
+
+den element-type auf EL_MEMBER zu setzen funktioniert wohl auch nicht.
+--> siehe auch test_struct_04.c --> ERLEDIGT 18.04.2009
+
+test_struct_02.c zeigt, dass auch sonst noch so einiges im argen liegt.
+struct deklaration und variablen definition sollten wohl besser sauber
+getrennt werden. ausserdem wird zwar die ref list für y kopiert, aber
+sinnvoll wäre wohl auch der su_name. insgesamt wäre es aber wohl besser
+wenn es nur eine struct deklaration gäbe und x und y darauf referenzieren.
+--> ERLEDIGT 18.04.2009
+
+für member ist element auch nicht korrekt gesetzt
+--> ERLEDIGT 18.04.2009
+
+19.04.2009
+tq_list --> test_struct_06.c --> da stimmt was nicht
+in c_fi_apply_declaration_specifiers wird tq nicht initalisiert!!
+tq = GetLastTQ()
+--> ERLEDIGT 19.04.2009
+
+
+1.5.2009
+test_struct_07.c: mtql zeigt bei dem member a auf sich selbst
+fehler???
+--> NEIN, das ist so i.O.
+
+test_decl_10.c: erzeugt irgendwelche fehler (... nicht gefunden):
+--> ERLEDIGT 02.05.2009
+
+3.5.2009
+Der Unterschied zwischen "pointer auf array mit int" und "array mit pointer
+auf int" wird nicht erkannt. Siehe test_mtql_04.c
+Das ist ein grundsätzliches Problem: Eventuell sollte man beim feststellen
+einer klammer ein automatisches zwischenobjekt einführen
+
+int (*a)[3]   // pointer auf array mit int
+  --> unnamened typedef    referenz von * auf int [3]
+
+--> neuen element typ eingeführt
+--> mtql muss noch angepasst werden
+
+9.5.2009 
+--> neuer typ ist no. 12 (C_EL_DECLARATOR_CHAIN)
+
+14.05.2009
+mtql: das 0. element sollte alle notwendigen informationen tragen: tq & array
+Damit muss das array des finalen zieltypes ZUERST reinkopiert werden. Ebenso das tq.
+
+22.5.2009 
+versuchen wir es mal mit einer spezifikation
+
+Spezifikation: mtql ist eine pointer liste, beginnend mit der ersten pointer-referenz
+
+int  *  *  *  a;
+In der tq-liste des elements steht das erste '*' im index 1, das zweite als index 2 und das dritte als index 3.
+in test_mtql_05.c: "int * const * volatile * restrict a;"
+-->  tq_list:      size 4     0: 1:c 2:v 3:r
+Also genau andersherum wie die spezifikation
+
+Was ist also mit typedefs? --> 
+test_mtql_06.c
+	typedef int * const * restrict t;			tq_list:      size 3     0: 1:c 2:r
+	volatile t * const * volatile * restrict a;	tq_list:      size 4     0:v 1:c 2:v 3:r
+	
+wäre also die mtql:
+ 3:r 2:v 1:c ( 0:v | 2:r) 1:c  0:
+
+Algorithmus (V1):
+	1) element:
+		mit dem letzten element
+			Wenn mtql leer ist
+				kopiere das tq element zur mtql
+			ansonsten:
+				verordere das tq mit dem letzten element der mtql
+		mit n-1 elementen der tq-list des elements, beginnend mit dem vorletzten letzten
+			hänge das tq an die mtql
+	2) gibt es eine typedef referenz
+		ermittle typedef element, gehe zu 1)
+		
+ok, fehlt noch das CHAIN element, und... was passiert mit den arrays???
+
+arrays --> 
+test_mtql_07.c
+typedef int * const * restrict t[3];
+volatile t * const * volatile * restrict a[4];
+
+Spezifikation: Das array sollte bei dem jeweiligen pointer stehen, also
+ 3:r[4] 2:v 1:c (0:v | 2:r[3]) 1:c  0:
+
+Algorithmus (V2):
+	1) element:
+		mit dem letzten element
+			Wenn mtql leer ist
+				kopiere das tq element und das array zur mtql
+			ansonsten:
+				a) verordere das tq mit dem letzten element der mtql
+				b) hänge gegebenenfalls die array dimension zusammen
+		mit n-1 elementen der tq-list des elements, beginnend mit dem vorletzten letzten
+			hänge das tq an die mtql
+	2) gibt es eine typedef referenz
+		ermittle typedef element, gehe zu 1)
+
+complext types: verhalten sich so wie type ref's -->
+test_mtql_08.c
+
+Algorithmus (V3):
+	1) element:
+		mit dem letzten element
+			Wenn mtql leer ist
+				kopiere das tq element und das array zur mtql
+			ansonsten:
+				a) verordere das tq mit dem letzten element der mtql
+				b) hänge gegebenenfalls die array dimension zusammen
+		mit n-1 elementen der tq-list des elements, beginnend mit dem vorletzten letzten
+			hänge das tq an die mtql
+	2) gibt es eine typedef (td_idx) oder  complex_type_ref gibt
+		ermittle ziel-element, gehe zu 1)
+		
+Wie ist das mit den array dimensionen???
+--> scheint korrekt zu sein test_mtql_09.c
+
+
+Erzeugung des Datentyps
+
+	1) Datentyp ausgeben
+	2) idx = letzter index des mtql - 1
+	3) gebe tq aus
+	4) wenn idx > 0 
+	     4.1) wenn array und idx != 1 dann '(' ausgeben 
+	     4.2) gebe '*' aus 
+	     4.3) gebe tq aus
+	     4.4) recur    <-- mal sehen
+	     4.5) wenn array
+		    4.5.1) wenn idx != 1 dann ')' ausgeben
+		    4.5.2) array index ausgeben
+	     4.6) --
+	 5) ende
+
+23.5.2009 
+TODO 
+1) --> MTQLBuildC --> struct/union/enum Name
+2) test_mtql_04.c --> geht nicht 
+  --> ERLEDIGT 24.5.2009
+  
+24.5.2009
+TODO 
+1A) --> MTQLBuildC --> struct/union/enum Name + 
+--> ERLEDIGT 27.5.2009
+
+1B) Return value (Function spec)
+... mal sehen
+
+25.5.2009
+TODO
+2) --> "struct s { int a; };"  erzeugt fälschlicherweise (?) eine leere declaration --> test_struct_08.c
+--> ERLEDIGT 26.5.2009
+
+27.5.2009
+TODO:
+- MTQL: Pointer auf function 
+- struct referencen auflösen (vor MTQL) --> test_mtql_10.c oder test_struct_08.c
+   Es dürfen keine Struct/Union Elemente mit is_su_decl_list == 1 mehr referenziert werden.
+  --> ERLEDIGT 21.6.2009
+  
+21.6.2009
+  
+  variablen zugriff
+  zustandsautomat:
+  daten: state, su_idx, var_idx, r, w
+  oder:
+    idx, state, r, w
+  
+  LOOKUP
+  alles gelöscht, keine variable oder su gefunden, 
+  casts: handelt es sich um eine struct oder union wird ein index auf die su definition gespeichert, ggf ist dann die variable leer
+  --> FOUND
+
+  FOUND
+  variable gefunden, casts beim auftauchen (depth first search) werden aufgelöst, sofern es ein struct oder union ist
+  wird die neue struktur gemerkt: index auf su definition  wird aktualisiert
+  --> wenn DFS auf "." oder "->" trifft beim hochgehen und idx >= 0 ist und auf structur verweist: MEMBER
+  
+  MEMBER
+  --> Wenn identifier, dann ersetze su_idx und/oder var_idx: FOUND
+  
+  CLOSE
+  
+  grundsätzlich:
+    beim abtauchen initalisieren
+    beim auftauchen nach oben weiterreichen, r/w stati setzen
+  
+  
+  binäre operatoren beim auftauchen:
+    beide argumente abschließen, wenn einer eine struct/union ist, dann nach oben übernehmen: 
+    es könnte ein pointer sein:  struct s *p;  (p + 1)->member
+ 
+27.6.2009
+TODO
+  test_fn_10.c --> syntax error, obwohl gültiger (K&R) code
+  --> ERLEDIGT 21.2.2010
+
+aktueller stand:
+c_fi_va.c --> handling von struct members ---> test_va_02.c
+
+28.6.2009
+ TODO in c_fi_va.c
+    a) schreib und lesezugriffe erkennen
+    b) casts berücksichtigen
+    
+
+30.6.2009
+  schreibzugriffe auf variablen via init declarator werden nicht erkannt (weil kein direct_assignment)
+  nicht ganz korrekt, oder ???? --> test_va_03.c
+--> ERLEDIGT --> wird als schreibzugriff gewertet
+  TODO
+    lesezugriff
+	- array index
+	- funktionsargument
+	- return statement
+	- for, if, while, switch
+	- ++, --   --> ERLEDIGT
+    casts
+
+  2.7.2009
+    while, 2x subnodes
+    for: 4x subnodes
+    der jeweils letzte knoten ist das statement. einzelne variablen da drin werden auch erkannt
+    Macht das sinn? --> test_va_10_while.c --> variable d sollte vermutlich nicht erkannt werden.
+    --> statement abfangen und index verwerfen?
+    --> nein, im gegenteil, eher als read markieren...
+    
+    3.7.2009
+    noch ein fehler in der gramar gefunden... erstaunlich 
+      | argument_expression_list ',' assignment_expression  { $$ = LIST($1, $2); }	falsch
+      | argument_expression_list ',' assignment_expression  { $$ = LIST($1, $3); }	korrekt
+
+    das allokieren von einem dyn. array in der dfs routine ist vermutlich überflüssig.
+    man hätte das vermeiden können, wenn die funktionsargumente im ast über eine 
+    weitere zwischenebene abgefangen worden wären (argument_expression_list)
+    naja, ich denke das ist so ganz ok.
+    
+    irgendwann sollte man aber mal das dynamische array für kleine längen noch optimieren.
+    ausserdem braucht man die dfs_struct wohl nicht.
+    
+    todo sind noch die casts
+	--> ERLEDIGT 5.7.2009
+	
+5.7.2009
+  Derzeit weiss man noch nicht wie auf pointer zugegriffen hat. Grundsätzlich sollte wohl
+  wenigstens die pointer derefernzierung als lesezugriff gelten (Egal, ob auf die Member
+  schreiben zugegriffen wird). Also:
+  Pointer/Objekt-Zugriffe als lesend markieren, wenn c_ell_GetMember aufgerufen wird.
+  
+  Einen weiteren sonderfall stellen casts dar. Die refernz auf den ursprünglichen pointer (vielleicht war das ein void)
+  geht dabei u.U. verloren.
+  
+  Also:
+    1) Argument von c_ell_GetMember() bekommt lesezugriff
+	--> test_va_02.c  --> lesezugriff auf o
+	--> ERLEDIGT 5.7.2009
+    2) Bei cast von complexen typen, dann ebenfalls lesezugriff
+	--> test_va_15_cast.c  --> lesezugriff auf p
+	--> ERLEDIGT 5.7.2009
+  
+17.2.2010
+  Umgang mit namenlosen objecten (insbesondere bei mtql)
+  siehe test_mtql_12.c
+  aktuell --> segmentation fault! Das MTQL Array scheint korrekt zu sein, aber die string 
+  convertierung nicht.
+  der seg fault tritt hier auf, da el->su_name NULL sein kan.
+  346           len += c_mtql_build_C_out(dest, el->su_name);
+    --> ERLEDIGT 21.2.2010
+
+   
+21.2.2010
+  in dem falle
+    typedef int t;
+    t o;
+  wird td_idx und td_name benutzt. bei struct refs wird complex_type_ref verwendet  (test_struct_03.c):
+    struct s { int a; };
+    struct s x;
+  x hat hier einen complex_type_ref auf die struktur. gleiches hier: es gibt ja gar keinen namen (test_mtql_13.c). 't' verweist via
+  complex_type_ref auf die structure.
+    typedef struct s { int a; } t;
+  In diesem Beispiel (test_mtql_14.c) ist das ebenso, es wird complex_type_ref verwendet:
+    struct s { int a; } t;
+  'td_name' wird für vorwärtsdefinitionen verwendet (test_typedef_11.c).
+    typedef struct s t;
+    t *o;
+  Fazit: td_name enthält den namen auf das eigentliche typedef. td_idx könnte aber eigentlich durch complex_type_ref ersetzt werden.
+
+  Um das problem mit dem 
+  namenlose structs und mtql:
+    - suche nach typedef auf die struct
+    --> complex_type_ref muss auf die struct zeigen und die pointer refs 0 sein.
+    
+    also: test_mtql_12.c und test_typedef_13.c schlagen hier fehl.
+  
+  Zusammenfassung aller Dinge die nicht gehen
+    - enum
+    - gleicher identifier für typedef und member name .. gcc kann das :-(
+    - namenlose structuren ohne typedefs (test_typedef_14.c) können nicht in einen mtql string konvertiert werden.
+    - test_fn_10.c erzeugt syntax error (funktion hat keinen rückgabewert --> default zu int)
+	--> ERLEDIGT (hoffentlich)
+    - K&R argument declaration (siehe todo in c_fi_fn.c)
+    
+  test_fn_10.c --> c_gram.y und ein paar c-files geändert, aber es gibt immer noch einen seg fault :-(
+	--> ERLEDIGT (hoffentlich)
+  
+--------------------------
+Erzeugen von Objekten
+  - reine extern declarationen (d.h. es existiert keine definition)
+  - funktionsargumente, sofern die funktion dann aufgerufen wird 
+  - umdeklaraton der definition durch hinzunahme des "extern" keywords
+    das hat aber einige konsequenzen
+    1) falls mehr als eine variable deklariert wurde, müssen alle variablen erzeugt werden
+	... mit allene elementen bei denen ast_declaration glich ist 
+    2) initializer sollte irgendwie gelöscht werden, falls er vorhanden ist (gcc erzeugt allerdings nur eine warning)
+    
+Erweiterung der mtql string erzeugung
+  1. schritt: anlegen und initalisieren des 0. elements der mtql. object mit zufallsname, falls weitere elemente in der mtql folgen
+  2. schritt: anlegen des 0..1 elements der mtql und initalisieren mit der adresse auf vorhergehendes objekt
+		      object mit zufallsname, falls weitere elemente in der mtql folgen
+  n. schritt: anlegen des 0..n-1 elements der mtql und initalisieren mit der adresse auf vorhergehendes objekt
+		      object mit zufallsname, falls weitere elemente in der mtql folgen
+  die initalisierung kann natürlich in jedem schritt ein array sein.
+  
+  
+  
+25.2.2010
+  auch wenn ich's vermeiden wollte, sowas wie eine dynamische str-klasse wird dann doch notwendig.
+  b_ds.c
+  b_ds_Pre(ds, char *s)
+  b_ds_Post(ds, char *s)
+  b_ds_Clear(ds)
+
+  b_ds_type 
+  {
+    size_t len;
+    char *str;
+  }
+  --> ERLEDIGT b_ds_type existiert 26.2.2010
+
+26.2.2010
+  object definition
+  offene punkte:
+  a) routine, die alle pre init strings erzeugt
+  b) eigentliche definition (main init) für ein bestimmtes object
+    1) aufsammeln aller relevanten pre inits
+    2) main definition
+  alternative
+    1) alle pre inits erzeugen
+    2) alle pre inits ausgeben
+    3) gewünschtes main init ausgeben
+  auch nicht so toll...
+    1) alle pre inits erzeugen, die gebraucht werden
+    2) alle pre inits ausgeben, die gebraucht werden
+    3) gewünschtes main init ausgeben
+
+27.2.2010
+  initalisierung von funktions-argumenten
+  pre-init geht dann für die member des funktionsprototypen eine stufe weiter!
+  Ausserdem braucht man nicht den rückgabewert initalisieren
+  
+  --- strategie vom 26.2.2010 ---
+  
+  rekusiv durch die elemente durchgehen und die pre-init strings sammeln
+  --> allgemeine rekursionsroutine
+    
+  es gibt eigentlich 2x main init: einmal mit zuweisung (toplevel) und einmal für die member.
+  
+  --> für datenstrukturen scheint das ganze zu funktionieren --> test_init_13.c
+  
+  Ohje:
+  test_init_15.c --> declarator chain hat die fn-argumente geerbt. irgendwie schaut das nicht so gut aus.
+    --> prüfen. Für daten member: test_decl_12.c
+	extern volatile int (* const a)[3];	--> test_decl_12.c
+	der äußere teil ist im chain object, jedoch ohne das extern (weil das zum a gehört)
+      --> ERLEDIGT 28.2.2010 das is_function flag verbleibt jetzt bei der entsprechenden ref-list
+      
+  TODO test_decl_12.c: pre init, da könnte man die klammer entfernen, (ist aber hoffentlich nur optisch)
+  
+  TODO test_decl_12.c und test_decl_14.c: passen eigentlich die zugehörigen ast elemente?
+      --> ERLEDIGT 28.2.2010: es sollte soweit passen
+  
+  Fazit: eigentlich müsste das in_line flag ins chain object wandern, dann wäre es konform zum test_decl_12.c
+  TODO: eine funktiondeclaration kann es eigentlich nicht mehr geben. Ob die ref-list die argumente beschreibt
+    sollte allein von is_function abhängen
+      --> Laut beschreibung ok: FN_DEF wird vermutlich nur für funktionsdefinitionen genutzt.
+      --> ERLEDIGT 28.2.2010
+  
+28.2.2010
+  function pointer zu initalisieren wird vermutlich schwierig, aber:
+  TODO: init for function calls
+    --> 1.3.2010 Bin dabei, siehe unten test_init_19.c
+  TODO: split global definition and in-function init (for function calls)
+  
+  funktions aufruf:
+    - eigene funktion, da mtql nicht existiert für die funktion
+    - alle argumente initalisieren und als argumente übergeben
+    
+  TODO: test_init_19.c --> diverse fehler u.a. interner error (chk)
+    --> 1.3.2010 TEILWEISE ERLEDIGT, aber weiter fehler (s.u.)
+
+1.3.2010
+    Analyse test_init_19.c 
+      --> das argument der funktion wird fälschlicherweise als struct deklariert (und nicht als function member)
+      --> es ist also die ell falsch, bzw das element
+      --> in der zeile c_fi_decl.c:761 kommt die sw vorbei und erzeugt das argument der funktion
+      --> das problem liegt wohl in zeile c_fi_decl.c:286: 
+	  C_EL_ARGUMENT wird mit C_EL_STRUCT überschrieben.
+	  da stellt sich die frage, warum brauche ich eigentlich C_EL_STRUCT???? die information, dass 
+	  die ref_list befüllt ist steht auch in is_struct/is_union
+	  
+      Was wäre wenn man C_EL_STRUCT durch C_EL_DECLARATION ersetzt?
+	c_fi_va.c --> suchroutine umschreiben	--> umgeschrieben.
+	c_el.c --> 
+		c_el_IsSU ändern. --> is_struct/is_union Wo wird das verwendet?	--> geändert
+		c_el_IsComplexType ändern. 	--> geändert
+		c_el_Check ändern.
+		Fazit c_el.c ist unkritisch
+	c_ell.c -->
+		c_ell_BuildMTQL --> schon geändert.
+		c_ell_GetMember --> schon geändert.
+	c_mtql.c --> 
+		c_ell_mtql_build_C_ptr --> sollte auch unkritisch sein. --> geändert
+		c_ell_init_pure --> ebenfalls gleich geändert.
+		
+		
+    TODO: test_va_14.c	warum wird von idx 0 'NULL' gelesen? --> mal klären
+    TODO: test_init_19.c 	funktioniert immer noch nicht
+		  1) init ist falsch (es fehlt die initalisierung der struktur)
+		      --> ERLEDIGT 2.3.2010
+		  2) check schlägt fehl (sieht aber nach falschmeldung aus)
+		      --> ERLEDIGT 2.3.2010
+
+2.3.2010
+
+    das mtql in c_ell_BuildMTQL wird nicht korrekt erstellt, da das argument als struct intepretiert
+    wird (complex type), da is_struct gesetzt ist.
+    Die frage ist: Wann soll denn nun is_struct gesetzt werden???
+
+  is_struct wird immer gesetzt, wenn das keyword struct verwendet wird. Gebraucht wird aber
+  die information, ob beispielsweise die member declariert wurden.
+  ah: gibt es das schon: is_su_member? nein, es ist "is_su_decl_list"
+  
+  Der Fehler mit test_init_19.c hatte eine ganze reihe von ursachen
+  - das ein element mit is_struct == 1 keinen complex_type_ref hat ist ein irrtum!
+  - das auflösen der struct hatte wohl noch einen bug (hängt auch mit dem irrtum zusammen)
+  - buildMTQL hatte auch einen fehler hinsichtlich nicht declarierter structs.
+
+3.3.2010
+
+  1) es gibt initalisierungen, die man nur am anfang einer funktion oder global mache kann
+  2) es gibt zuweisungen, die man sowohl global als auch irgendwo in einer funktion machen kann
+  3) es gibt initalisierungen, die nur in einer funktion erfolgen kann.
+  
+9.3.2010
+
+  etwas präziser
+    A) Global
+    B) Anfang einer funktion
+    C) Irgendwo in einer function
+    Kombinationen sind dann denkbar
+    AB, AC
+    
+  Denkbar wäre eine tabelle, in der die anweisungen stehen
+  struct isl /* init string list */
+    int el_idx;
+    unsigned int is_gobal:1;
+    unsigned int is_fn_start:1;
+    unsigned int is_fn:1;
+    unsigned int is_ext:1;		/* DRS */
+    b_ds_type ds;
+    
+  Wie geht man jetzt eigentlich mit ranges um?
+  Idee: Funktion aufrufen, die einen konkreten wert zurückgibt --> unit test
+    
+    
+19.3.2010
+  vielleicht sollte einfach eine string liste erzeugt werden. jede teilinitalisierung erhält dort einen eigenen string.
+  vielleicht sogar getrennt nach linker und rechter seite.
+  c_init_line
+    char *left
+    char *right
+  
+  c_init
+    array with c_init_line
+    int el_idx
+    unsigned is_last_inlineable  		wenn das letzte element keine funktion ist.
+    
+    im ersten schritt müsste dann aber doch das interface geändert werden und das erzeugen einer zeile über
+    callback funktionen gelöst werden.
+    
+    Neue Zwischen-Schicht
+    SetLeft
+    AddRight		hängt was an die zeile an
+    AddCR			schließt die zeile ab und ruft dann die eigentliche CB auf:
+      Callback: (*)(ell_type ell, int el_idx, const char *left, const char *right)
+    
+23.3.2010
+  mit der implementierung von c_init.c gestartet.
+		
+30.3.2010
+  c_init.c in c_mtql.c teilweise eingebaut. Funktionen fehlen noch
+
+  BUG: test_init_13.c 
+    über die visit function wird auch das object für das typedef erzeugt, das ist aber unsinn,
+    da es einerseits für das typedef gar kein init geben kann, andererseits ja das typedef 
+    bereits bestandteil des mtql ist. Wenn also ein element ein typedef ist, dann kann das 
+    übersprungen werden.
+      --> ERLEDIGT 31.3.2010 (is_typedef abfrage in c_ell_init_pre() ) --> s.u.
+  BUG: test_init_21.c (aus test_init_13.c erzeugt)
+    wie schon bespiel 13 ebenfalls falsch, es zeigt aber, dass generell pre-initalisierungen für das typedef
+    vorgenommen werden müssen, für das typedef selbst aber nicht (sozusagen Iline 001 ist überflüssig)
+    --> 31.3.2010: Ein Denkfehler, bzw sogar interpretationsfehler: Es ist sogar das gesamte pre-init de
+      typedefs überflüssig. In der tat sollte das ja in der mtql enthalten sein. Die ausgabe des beispiels ist:
+	  ILS 000: int _a_i_1=0;
+	  ILS 001: struct s _a_t_1={&_a_i_1};
+	  ILS 002: struct s _a_1={&_a_i_1};
+	  ILS 003: struct s *a[4]={&_a_1,&_a_1,&_a_1,&_a_1};
+      ILS 001 ist aber gar nicht (wie oben angenommen) das haupt init... das wird nämlich wirksam unterdrückt
+      in function  c_ell_init_pre() über die abfrage 
+	if ( c_mtql_CntMTQ(mtql) <= 1 )
+      Vielmehr handelt es sich bei ILS 001 tatsächlich um das (überflüssige) pre-init des typedefs.
+      nochmal ein test --> test_init_23.c (mit ** beim typedef)
+	  typedef struct s { int *i; } **t;
+	  t a[4];
+      erzeugt:
+	ILS 000: int _a_i_1=0;
+	ILS 001: struct s _a_t_2={&_a_i_1};
+	ILS 002: struct s *_a_t_1=&_a_t_2;
+	ILS 003: struct s _a_2={&_a_i_1};
+	ILS 004: struct s *_a_1=&_a_2;
+	ILS 005: struct s **a[4]={&_a_1,&_a_1,&_a_1,&_a_1};
+      Tatsächlich sind hier die pre-inits ILS 001 und ILS 002 überflüssig, weil die in der mtql vom hauptobject nachgeholt werden.
+      Fazit: Typedefs in der pre-build funktion des Visit-algorithmus überspringen
+      --> ERLEDIGT 31.3.2010 (is_typedef abfrage in c_ell_init_pre() )
+      
+      
+  BUG: test_init_14.c
+    ein anderes problem: warum wird das argument der funktion nicht initalisiert????
+      --> ERLEDIGT 31.3.2010: Der top_el_idx wurde nicht korrekt weitergegeben. 
+  
+  TODO
+    Es sollte alles auf die ILS umgestellt werden, wenn die Bugs oben behoben sind, d.h. die b_ds auf ell 
+    ebene sollten entfallen.
+      --> ERLEDIGT 31.3.2010: Alles soweit auskommentiert und geändert.
+  
+31.3.2010
+  TODO
+    Ein beispiel mit rekursiven structuren erstellen und ausprobieren
+      struct s { struct s *p; } o;  
+    --> ERLEDIGT 31.3.2010 test_init_24.c
+	Gar nicht so dumm: Es wird eine struktur erzeugt die auf sich selbst zeigt.    
+  TODO
+    1) Mehr beispiele
+	  --> ERLEDIGT 31.3.2010: test_init_25.c, test_init_26.c --> sieht eigentlich ganz gut aus.
+	      Der Visit algorithmus scheint wohl soweit dafür zu sorgen, dass keine unendlichen rekursionen auftreten.
+	      Vielmehr sind dann die objekte gegenseitig aufeinander verzeigert.
+    2) Prüfen, ob gcc den generierten code akzeptiert.
+      
+      
+  Bemerkung: Als fazit für die einführung des ILS, könnte man sagen: Einen fehler gefunden und die erzeugung
+    von namen ist deutlich besser und klarer geworden.
+    Wobei... da fällt mir ein beispiel ein, das vielleicht nicht gehen könnte.
+    Tatsächlich, wie vermutet:
+    
+  BUG: test_init_25.c schlägt fehl, da zwei verschiedene member den gleichen namen haben.
+    --> Nummern vor die Namen schreiben
+    --> Erledigt 31.3.2010
+
+  TODO
+    Eher eine Idee: Für jedes Funktionsargument wird eine eigene variable erzeugt. Das könnte man unter bestimmten umständen
+    vermeiden.
+    
+    
+1.4.2010
+  Min/Max: Als string in der dt struct...
+  
+25.4.2010
+  TODO
+  * Min/Max: Als string in der dt struct...
+  * Abfrage/Such-Sprache zum aufsuchen von elementen (interessant sind hier natürlich nur elemente mit dt)
+  
+  Such-Syntax
+    name:='name' '=' <identifier>
+    single-element:= <name>
+    pathmatch:= { <single-element> | '*' }*
+    
+  Eigentlich braucht man zwei verschiedene Suchen
+    objekt suche 	z.b. variablen name -> member suche
+    datentyp suche 	z.b. struct name -> member suche
+    member suche
+    
+29.4.2010
+  ACHTUNG TODO:
+    c_gram.y nochmal durchsuchen
+    designator_list    --> da fehlen strichpunkte :-(
+
