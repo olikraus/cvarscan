@@ -1,0 +1,1 @@
+An analysis tool for C99 code. Extracts information on variables declared and used in C code.
